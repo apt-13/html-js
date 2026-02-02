@@ -10,9 +10,72 @@ function create(tag, content = '', attrs = {}) {
 
     // Add modifier helper
     el.modifier = function(type, obj) {
-        if (type === 'style') Object.assign(el.style, obj);
-        else if (type === 'attribute') Object.entries(obj).forEach(([k, v]) => attributeAppender(el, k, v));
-        else if (type === 'listeners') Object.entries(obj).forEach(([evt, fn]) => el.addEventListener(evt, fn));
+        if (type === 'style') {
+            Object.assign(el.style, obj);
+
+        } else if (type === 'attribute') {
+            Object.entries(obj).forEach(([k, v]) => attributeAppender(el, k, v));
+
+        } else if (type === 'listeners') {
+            Object.entries(obj).forEach(([evt, fn]) => el.addEventListener(evt, fn));
+
+        } else if (type === 'animation') {
+            // CSS Animation
+            const {
+                name,
+                duration = 400,
+                timing = 'ease',
+                delay = 0,
+                iteration = 1,
+                fillMode = 'forwards',
+                onEnd = null
+            } = obj;
+
+            el.style.animationName = name;
+            el.style.animationDuration = duration + 'ms';
+            el.style.animationTimingFunction = timing;
+            el.style.animationDelay = delay + 'ms';
+            el.style.animationIterationCount = iteration;
+            el.style.animationFillMode = fillMode;
+
+            if (onEnd) {
+                const handleEnd = () => {
+                    el.removeEventListener('animationend', handleEnd);
+                    onEnd();
+                };
+                el.addEventListener('animationend', handleEnd);
+            }
+
+        } else if (type === 'transition') {
+            // CSS Transition
+            const {
+                property,
+                values = {},
+                duration = 400,
+                timing = 'ease',
+                delay = 0,
+                onEnd = null
+            } = obj;
+
+            el.style.transition = `${property} ${duration}ms ${timing} ${delay}ms`;
+            // Trigger layout for restart
+            void el.offsetWidth;
+            Object.entries(values).forEach(([prop, value]) => el.style[prop] = value);
+
+            if (onEnd) {
+                const handler = (e) => {
+                    if (e.target === el && e.propertyName === property) {
+                        el.removeEventListener('transitionend', handler);
+                        onEnd();
+                    }
+                };
+                el.addEventListener('transitionend', handler);
+            }
+
+        } else {
+            throw new Error("Modifier type must be 'style', 'attribute', 'listeners', 'animation', or 'transition'");
+        }
+
         return el; // chainable
     };
 
@@ -21,10 +84,7 @@ function create(tag, content = '', attrs = {}) {
 
 // Function to append HTML tags
 function appendTag(child, parent) {
-    const p = parent instanceof Node
-        ? parent
-        : document.querySelector(parent);
-
+    const p = parent instanceof Node ? parent : document.querySelector(parent);
     if (!p) throw new Error('Parent not found');
     p.appendChild(child);
 }
@@ -39,58 +99,9 @@ function attributeAppender(el, k, v) {
     }
 }
 
-// Transition + Animation = transmation
-function transmation(el, type, name, options = {}) {
-    if (!(el instanceof Node)) throw new Error("Invalid element");
+// Expose globally (CDN ready)
+(function(global) {
+    global.create = create;
+    global.appendTag = appendTag;
+})(window);
 
-    // Defaults
-    const {
-        duration = 400,      // ms
-        timing = "ease",
-        delay = 0,
-        iteration = 1,
-        fillMode = "forwards",
-        onEnd = null         // callback after animation ends
-    } = options;
-
-    if (type === "transition") {
-        // Apply CSS transition
-        el.style.transition = `${name} ${duration}ms ${timing} ${delay}ms`;
-        // Trigger layout to restart transition
-        void el.offsetWidth; 
-        if (options.values) {
-            for (const [prop, value] of Object.entries(options.values)) {
-                el.style[prop] = value;
-            }
-        }
-
-        if (onEnd) {
-            const handler = (e) => {
-                if (e.target === el && e.propertyName === name) {
-                    el.removeEventListener("transitionend", handler);
-                    onEnd();
-                }
-            };
-            el.addEventListener("transitionend", handler);
-        }
-
-    } else if (type === "animation") {
-        // Apply CSS animation
-        el.style.animationName = name;
-        el.style.animationDuration = duration + "ms";
-        el.style.animationTimingFunction = timing;
-        el.style.animationDelay = delay + "ms";
-        el.style.animationIterationCount = iteration;
-        el.style.animationFillMode = fillMode;
-
-        const handleEnd = () => {
-            el.removeEventListener("animationend", handleEnd);
-            if (onEnd) onEnd();
-        };
-        el.addEventListener("animationend", handleEnd);
-    } else {
-        throw new Error("Type must be 'transition' or 'animation'");
-    }
-
-    return el; // chainable
-}
